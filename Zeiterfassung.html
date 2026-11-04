@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeiterfassung</title>
+<style>
+:root{--bg:#f3f4f7;--card:#fff;--text:#1f2430;--muted:#6b7280;--line:#e1e4ea;--accent:#2563eb;--danger:#c62828;--radius:12px}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--card:#1d2026;--text:#e6e8ec;--muted:#9aa1ad;--line:#2e333b;--accent:#6ea0ff;--danger:#ff7b72}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.wrap{max-width:1000px;margin:0 auto;padding:0 16px}
+header .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+h1{font-size:18px;margin:0}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;padding:8px 14px;border-radius:8px;font:inherit;color:var(--muted);cursor:pointer}
+nav button.on{background:var(--accent);color:#fff}
+main{padding-top:16px;padding-bottom:60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+h2{font-size:16px;margin:0 0 12px}
+.small{font-size:13px;color:var(--muted)}
+.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);padding:7px 14px;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.ghost-danger{color:var(--danger)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+input,select{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+input[type=color]{padding:2px;width:42px;height:34px;cursor:pointer}
+.running{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-left:8px solid var(--c);background:color-mix(in srgb,var(--c) 12%,var(--card))}
+.running>div:first-child{flex:1;min-width:160px}
+.rname{font-size:20px;font-weight:600;display:flex;align-items:center;gap:8px}
+.rtime{font-size:34px;font-variant-numeric:tabular-nums;font-weight:600}
+.idle{color:var(--muted)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--c);flex:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.abtn{font:inherit;text-align:left;cursor:pointer;color:var(--text);background:var(--card);border:1px solid var(--line);border-left:8px solid var(--c);border-radius:var(--radius);padding:16px 14px;display:flex;flex-direction:column;gap:4px;min-height:84px}
+.abtn:hover{background:color-mix(in srgb,var(--c) 10%,var(--card))}
+.abtn.on{background:color-mix(in srgb,var(--c) 22%,var(--card));box-shadow:0 0 0 2px var(--c)}
+.abtn .n{font-weight:600;font-size:16px}
+.abtn .t{font-size:13px;color:var(--muted)}
+.daynav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.daynav .sp{flex:1}
+.stack{display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--line);margin:8px 0}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+ul.entries{list-style:none;margin:12px 0 0;padding:0}
+.entry{display:flex;align-items:center;gap:10px;padding:9px 6px;border-top:1px solid var(--line);cursor:pointer;border-radius:6px}
+.entry:hover{background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+.entry .ename{flex:1;font-weight:500}
+.entry .etime,.entry .edur{font-variant-numeric:tabular-nums;color:var(--muted)}
+.entry .edur{min-width:70px;text-align:right;color:var(--text)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.dist{display:grid;grid-template-columns:minmax(120px,200px) 1fr 90px 60px;gap:8px 12px;align-items:center}
+.bar{height:18px;background:var(--line);border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.dayrow{display:grid;grid-template-columns:130px 1fr 80px;gap:10px;align-items:center;margin:4px 0}
+.dayrow .stack{margin:0}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+tfoot td{font-weight:700;border-top:2px solid var(--line)}
+.arow{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.arow input[type=text]{flex:1;min-width:140px}
+.arow.arch input[type=text]{opacity:.5}
+.arow .small{min-width:70px}
+dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);color:var(--text);padding:20px;width:min(420px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog label{display:block;margin:10px 0 4px;font-size:13px;color:var(--muted)}
+dialog select,dialog input{width:100%}
+.dlgbtns{display:flex;gap:8px;margin-top:18px}
+.dlgbtns .sp{flex:1}
+.warn{background:#fff4d6;color:#6b4e00;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:14px}
+@media (prefers-color-scheme:dark){.warn{background:#3a3115;color:#f3dc8d;border-color:#5b4d1c}}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20;max-width:90vw}
+#toast.show{opacity:1}
+.empty{color:var(--muted);padding:8px 0}
+@media (max-width:600px){.dist{grid-template-columns:1fr 70px 50px}.dist .bar{grid-column:1/-1;order:5}.dayrow{grid-template-columns:100px 1fr 60px}.rtime{font-size:28px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>⏱ Zeiterfassung</h1>
+  <nav id="nav">
+    <button data-act="tab" data-id="erfassen">Erfassen</button>
+    <button data-act="tab" data-id="auswertung">Auswertung</button>
+    <button data-act="tab" data-id="einstellungen">Tätigkeiten</button>
+    <button data-act="tab" data-id="daten">Daten</button>
+  </nav>
+</div></header>
+<main class="wrap" id="main"></main>
+
+<dialog id="dlg">
+  <h2 id="dTitle">Eintrag</h2>
+  <label for="dAct">Tätigkeit</label><select id="dAct"></select>
+  <label for="dStart">Beginn</label><input type="datetime-local" id="dStart">
+  <label for="dEnd">Ende <span id="dEndHint" class="small"></span></label><input type="datetime-local" id="dEnd">
+  <div class="dlgbtns">
+    <button class="btn ghost-danger" type="button" id="dDel">Löschen</button>
+    <span class="sp"></span>
+    <button class="btn" type="button" id="dCancel">Abbrechen</button>
+    <button class="btn primary" type="button" id="dSave">Speichern</button>
+  </div>
+</dialog>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const KEY = 'zeiterfassung_v1';
+const PALETTE = ['#2563eb','#16a34a','#ea580c','#9333ea','#0891b2','#db2777','#ca8a04','#64748b'];
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+/* ---------- Datum/Zeit ---------- */
+const dstr = d => { d = new Date(d); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); };
+const parseD = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const todayStr = () => dstr(Date.now());
+const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); };
+const dtLocal = ms => { const d = new Date(ms); return dstr(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const fmtDate = ms => { const d = new Date(ms); return pad(d.getDate()) + '.' + pad(d.getMonth()+1) + '.' + d.getFullYear(); };
+const fmtTime = ms => { const d = new Date(ms); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const longDay = s => parseD(s).toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'});
+function hms(ms){ const t = Math.max(0, Math.floor(ms/1000)); return Math.floor(t/3600) + ':' + pad(Math.floor(t%3600/60)) + ':' + pad(t%60); }
+function fmtD(ms){
+  if (ui.fmt === 'dec') return (ms/3600000).toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' h';
+  const m = Math.round(ms/60000); return Math.floor(m/60) + ':' + pad(m%60) + ' h';
+}
+const decCsv = ms => (ms/3600000).toFixed(2).replace('.', ',');
+
+/* ---------- Zustand ---------- */
+function defaultState(){
+  const names = ['Internetfiliale','Telefon','Hotline','Besprechung','E-Mail / Organisation','Sonstiges'];
+  const ids = ['internetfiliale','telefon','hotline','besprechung','email','sonstiges'];
+  return {version:1, activities: names.map((n,i)=>({id:ids[i], name:n, color:PALETTE[i], archived:false})), entries:[], lastExport:null};
+}
+function normalize(){
+  const open = state.entries.filter(e => e.e == null).sort((a,b)=>a.s-b.s);
+  for (let i=0; i<open.length-1; i++) open[i].e = open[i+1].s;
+}
+function load(){
+  try{
+    const r = localStorage.getItem(KEY);
+    if (r){ const s = JSON.parse(r); if (s && Array.isArray(s.activities) && Array.isArray(s.entries)) return s; }
+  }catch(e){}
+  return defaultState();
+}
+let state = load(); normalize();
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch(e){ toast('Speichern im Browser nicht möglich – bitte Daten exportieren!'); }
+}
+const ui = {tab:'erfassen', day:todayStr(), range:'week', from:'', to:'', fmt:'hm'};
+const act = id => state.activities.find(a => a.id === id) || {id, name:'(unbekannt)', color:'#999999', archived:true};
+const running = () => state.entries.find(e => e.e == null);
+
+let toastTimer;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 3200); }
+
+/* ---------- Erfassen ---------- */
+function startAct(aid){
+  const now = Date.now(), r = running();
+  if (r){
+    r.e = now;
+    if (now - r.s < 3000) state.entries = state.entries.filter(e => e !== r); // versehentlicher Klick
+    if (r.a === aid){ save(); render(); return; }
+  }
+  state.entries.push({id:uid(), a:aid, s:now, e:null});
+  save(); render();
+}
+function stopAct(){
+  const r = running(); if (!r) return;
+  const now = Date.now(); r.e = now;
+  if (now - r.s < 3000) state.entries = state.entries.filter(e => e !== r);
+  save(); render();
+}
+function dayTotals(day){
+  const d0 = parseD(day).getTime(), d1 = parseD(addDays(day,1)).getTime(), now = Date.now();
+  const by = {}; let total = 0;
+  for (const e of state.entries){
+    const end = e.e ?? now;
+    if (end <= d0 || e.s >= d1) continue;
+    const ms = Math.min(end, d1) - Math.max(e.s, d0);
+    by[e.a] = (by[e.a]||0) + ms; total += ms;
+  }
+  return {by, total};
+}
+function stack(by, total){
+  if (!total) return '<div class="stack"></div>';
+  const parts = state.activities.concat(Object.keys(by).filter(k=>!state.activities.some(a=>a.id===k)).map(k=>act(k)))
+    .filter(a => by[a.id] > 0)
+    .map(a => `<i style="width:${by[a.id]/total*100}%;background:${a.color}" title="${esc(a.name)}: ${fmtD(by[a.id])}"></i>`).join('');
+  return `<div class="stack">${parts}</div>`;
+}
+function legend(by, total){
+  return '<div class="legend">' + state.activities.filter(a => by[a.id] > 0).map(a =>
+    `<span><span class="dot" style="--c:${a.color}"></span>${esc(a.name)} ${fmtD(by[a.id])} (${Math.round(by[a.id]/total*100)} %)</span>`).join('') + '</div>';
+}
+function viewErfassen(){
+  const now = Date.now(), r = running(), t = todayStr(), today = dayTotals(t);
+  let h = '';
+  if (r){
+    const a = act(r.a);
+    h += `<section class="card running" style="--c:${a.color}"><div><div class="small">läuft seit ${fmtTime(r.s)} Uhr${dstr(r.s)!==t?' ('+fmtDate(r.s)+')':''}</div><div class="rname"><span class="dot" style="--c:${a.color}"></span>${esc(a.name)}</div></div><div class="rtime" id="liveTime">${hms(now-r.s)}</div><button class="btn danger" data-act="stop">■ Stopp</button></section>`;
+    if (now - r.s > 12*3600*1000) h += `<div class="warn">Diese Tätigkeit läuft seit über 12 Stunden – evtl. wurde vergessen zu stoppen. Du kannst den Eintrag unten korrigieren.</div>`;
+  } else h += `<section class="card idle">Es läuft gerade keine Tätigkeit. Klicke auf eine Tätigkeit, um die Zeit zu starten.</section>`;
+
+  const vis = state.activities.filter(a => !a.archived);
+  h += '<div class="grid">' + (vis.length ? vis.map(a =>
+    `<button class="abtn ${r&&r.a===a.id?'on':''}" style="--c:${a.color}" data-act="start" data-id="${a.id}"><span class="n">${esc(a.name)}</span><span class="t">heute <span data-today="${a.id}">${fmtD(today.by[a.id]||0)}</span></span></button>`).join('')
+    : '<div class="empty">Keine Tätigkeiten vorhanden – lege sie unter „Tätigkeiten“ an.</div>') + '</div>';
+
+  const day = ui.day, dt = dayTotals(day);
+  const d0 = parseD(day).getTime(), d1 = parseD(addDays(day,1)).getTime();
+  const list = state.entries.filter(e => (e.e ?? now) > d0 && e.s < d1).sort((a,b)=>a.s-b.s);
+  h += `<section class="card"><div class="daynav">
+    <button class="btn" data-act="dayprev">◀</button>
+    <input type="date" data-bind="day" value="${day}">
+    <button class="btn" data-act="daynext">▶</button>
+    <button class="btn" data-act="daytoday">Heute</button>
+    <span class="sp"></span>
+    <span><b id="liveDayTotal">${fmtD(dt.total)}</b> <span class="small">gesamt · ${longDay(day)}</span></span>
+  </div>${stack(dt.by, dt.total)}${dt.total?legend(dt.by, dt.total):''}
+  <ul class="entries">${list.length ? list.map(e => {
+    const a = act(e.a), end = e.e ?? now;
+    const ms = Math.min(end,d1) - Math.max(e.s,d0);
+    const st = (e.s < d0 ? fmtDate(e.s)+' ' : '') + fmtTime(e.s);
+    const en = e.e == null ? 'läuft' : ((e.e > d1 ? fmtDate(e.e)+' ' : '') + fmtTime(e.e));
+    return `<li class="entry" data-act="edit" data-id="${e.id}"><span class="dot" style="--c:${a.color}"></span><span class="ename">${esc(a.name)}</span><span class="etime">${st} – ${en}</span><span class="edur">${fmtD(ms)}</span></li>`;
+  }).join('') : '<li class="empty">Für diesen Tag gibt es keine Einträge.</li>'}</ul>
+  <div style="margin-top:12px"><button class="btn" data-act="new">+ Eintrag nachtragen</button> <span class="small">Klick auf einen Eintrag zum Bearbeiten. Einträge unter 3 Sekunden werden verworfen.</span></div></section>`;
+  return h;
+}
+
+/* ---------- Auswertung ---------- */
+function getRange(){
+  const t = todayStr(), d = parseD(t), wd = (d.getDay()+6)%7; let f, to;
+  switch (ui.range){
+    case 'today': f = to = t; break;
+    case 'yesterday': f = to = addDays(t,-1); break;
+    case 'week': f = addDays(t,-wd); to = addDays(f,6); break;
+    case 'lastweek': to = addDays(t,-wd-1); f = addDays(to,-6); break;
+    case 'month': f = dstr(new Date(d.getFullYear(), d.getMonth(), 1)); to = dstr(new Date(d.getFullYear(), d.getMonth()+1, 0)); break;
+    case 'lastmonth': f = dstr(new Date(d.getFullYear(), d.getMonth()-1, 1)); to = dstr(new Date(d.getFullYear(), d.getMonth(), 0)); break;
+    case 'year': f = d.getFullYear()+'-01-01'; to = d.getFullYear()+'-12-31'; break;
+    case 'all': f = '0000-01-01'; to = '9999-12-31'; break;
+    default: f = ui.from || t; to = ui.to || t; if (f > to) [f,to] = [to,f];
+  }
+  return {f, to};
+}
+function segments(e, now){
+  const end = e.e ?? now, out = []; let cur = e.s;
+  while (cur < end){
+    const d = new Date(cur), next = new Date(d.getFullYear(), d.getMonth(), d.getDate()+1).getTime(), stop = Math.min(end, next);
+    out.push({day:dstr(d), ms:stop-cur}); cur = stop;
+  }
+  return out;
+}
+function aggregate(){
+  const now = Date.now(), {f,to} = getRange(), days = {}, tot = {}; let total = 0;
+  for (const e of state.entries) for (const sg of segments(e, now)){
+    if (sg.day < f || sg.day > to) continue;
+    if (!days[sg.day]) days[sg.day] = {};
+    days[sg.day][e.a] = (days[sg.day][e.a]||0) + sg.ms;
+    tot[e.a] = (tot[e.a]||0) + sg.ms; total += sg.ms;
+  }
+  return {f, to, days, tot, total};
+}
+function orderedActs(ids){
+  const known = state.activities.filter(a => ids.has(a.id));
+  const extra = [...ids].filter(i => !state.activities.some(a => a.id === i)).map(act);
+  return known.concat(extra);
+}
+function viewAuswertung(){
+  const R = [['today','Heute'],['yesterday','Gestern'],['week','Diese Woche'],['lastweek','Letzte Woche'],['month','Dieser Monat'],['lastmonth','Letzter Monat'],['year','Dieses Jahr'],['all','Alles'],['custom','Zeitraum …']];
+  const g = aggregate(), dayKeys = Object.keys(g.days).sort();
+  let h = `<div class="controls">
+    <select data-bind="range">${R.map(([v,l])=>`<option value="${v}" ${ui.range===v?'selected':''}>${l}</option>`).join('')}</select>
+    ${ui.range==='custom'?`<input type="date" data-bind="from" value="${ui.from||todayStr()}"> bis <input type="date" data-bind="to" value="${ui.to||todayStr()}">`:''}
+    <select data-bind="fmt"><option value="hm" ${ui.fmt==='hm'?'selected':''}>Anzeige: h:mm</option><option value="dec" ${ui.fmt==='dec'?'selected':''}>Anzeige: Dezimalstunden</option></select>
+    <span class="small">${ui.range==='all'?'':longDay(g.f)+' – '+longDay(g.to)}</span>
+  </div>`;
+  if (!g.total) return h + '<div class="card empty">In diesem Zeitraum wurde noch nichts erfasst.</div>';
+  h += `<div class="stats"><div class="stat"><span class="small">Gesamtzeit</span><b>${fmtD(g.total)}</b></div>
+    <div class="stat"><span class="small">Tage mit Erfassung</span><b>${dayKeys.length}</b></div>
+    <div class="stat"><span class="small">Ø pro erfasstem Tag</span><b>${fmtD(g.total/dayKeys.length)}</b></div></div>`;
+
+  const acts = orderedActs(new Set(Object.keys(g.tot))).sort((a,b)=>g.tot[b.id]-g.tot[a.id]);
+  const max = g.tot[acts[0].id];
+  h += `<section class="card"><h2>Verteilung der Tätigkeiten</h2><div class="dist">` + acts.map(a =>
+    `<span><span class="dot" style="--c:${a.color}"></span> ${esc(a.name)}</span><div class="bar"><i style="width:${g.tot[a.id]/max*100}%;background:${a.color}"></i></div><span class="num">${fmtD(g.tot[a.id])}</span><span class="num">${(g.tot[a.id]/g.total*100).toLocaleString('de-DE',{maximumFractionDigits:1})} %</span>`).join('') + `</div></section>`;
+
+  const maxDay = Math.max(...dayKeys.map(d => Object.values(g.days[d]).reduce((x,y)=>x+y,0)));
+  h += `<section class="card"><h2>Verlauf je Tag</h2>` + dayKeys.map(d => {
+    const tt = Object.values(g.days[d]).reduce((x,y)=>x+y,0);
+    return `<div class="dayrow"><span>${longDay(d)}</span><div style="width:${tt/maxDay*100}%;min-width:4px">${stack(g.days[d], tt)}</div><span class="num">${fmtD(tt)}</span></div>`;
+  }).join('') + `<div style="margin-top:10px">${legend(g.tot, g.total)}</div></section>`;
+
+  const cols = orderedActs(new Set(Object.keys(g.tot)));
+  h += `<section class="card"><div class="daynav"><h2 style="margin:0">Tabelle Tag × Tätigkeit</h2><span class="sp"></span><button class="btn" data-act="csvEval">CSV exportieren</button></div><div class="tablewrap"><table><thead><tr><th>Tag</th>${cols.map(a=>`<th>${esc(a.name)}</th>`).join('')}<th>Summe</th></tr></thead><tbody>` +
+    dayKeys.map(d => { const tt = Object.values(g.days[d]).reduce((x,y)=>x+y,0);
+      return `<tr><td>${longDay(d)}</td>${cols.map(a=>`<td>${g.days[d][a.id]?fmtD(g.days[d][a.id]):'–'}</td>`).join('')}<td><b>${fmtD(tt)}</b></td></tr>`; }).join('') +
+    `</tbody><tfoot><tr><td>Summe</td>${cols.map(a=>`<td>${fmtD(g.tot[a.id])}</td>`).join('')}<td>${fmtD(g.total)}</td></tr></tfoot></table></div></section>`;
+  return h;
+}
+
+/* ---------- Tätigkeiten ---------- */
+function viewSettings(){
+  const cnt = {}; state.entries.forEach(e => cnt[e.a] = (cnt[e.a]||0)+1);
+  return `<section class="card"><h2>Tätigkeiten konfigurieren</h2>
+  <p class="small" style="margin-top:0">Diese Tätigkeiten erscheinen auf der Startseite als Buttons. Tätigkeiten mit vorhandenen Einträgen können nur ausgeblendet werden, damit die Auswertung vollständig bleibt.</p>` +
+  state.activities.map((a,i) => `<div class="arow ${a.archived?'arch':''}">
+    <input type="color" value="${a.color}" data-bind="acolor" data-id="${a.id}">
+    <input type="text" value="${esc(a.name)}" data-bind="aname" data-id="${a.id}" maxlength="40">
+    <span class="small">${cnt[a.id]||0} Einträge</span>
+    <button class="btn" data-act="up" data-id="${a.id}" ${i===0?'disabled':''} title="nach oben">↑</button>
+    <button class="btn" data-act="down" data-id="${a.id}" ${i===state.activities.length-1?'disabled':''} title="nach unten">↓</button>
+    <button class="btn" data-act="arch" data-id="${a.id}">${a.archived?'Einblenden':'Ausblenden'}</button>
+    <button class="btn ghost-danger" data-act="delAct" data-id="${a.id}" ${cnt[a.id]?'disabled title="Es gibt Einträge – bitte ausblenden"':''}>Löschen</button>
+  </div>`).join('') +
+  `<div class="arow"><input type="color" id="newColor" value="${PALETTE[state.activities.length % PALETTE.length]}"><input type="text" id="newName" placeholder="Neue Tätigkeit, z. B. Google Ads" maxlength="40"><button class="btn primary" data-act="addAct">+ Hinzufügen</button></div></section>`;
+}
+
+/* ---------- Daten ---------- */
+function viewDaten(){
+  const le = state.lastExport;
+  const old = state.entries.length && (!le || Date.now()-le > 14*86400000);
+  return `${old?`<div class="warn">Die Daten liegen nur in diesem Browser. ${le?'Letzte Sicherung: '+fmtDate(le)+'.':'Es wurde noch keine Sicherung erstellt.'} Bitte regelmäßig exportieren.</div>`:''}
+  <section class="card"><h2>Sichern (Export)</h2>
+    <p class="small" style="margin-top:0">${state.entries.length} Einträge, ${state.activities.length} Tätigkeiten.${le?' Letzte Sicherung: '+fmtDate(le)+' '+fmtTime(le)+'.':''}</p>
+    <button class="btn primary" data-act="expJson">Sicherung herunterladen (JSON)</button>
+    <button class="btn" data-act="csvEntries">Alle Einträge als CSV (Excel)</button></section>
+  <section class="card"><h2>Wiederherstellen (Import)</h2>
+    <p style="margin-top:0"><label><input type="radio" name="impmode" value="merge" checked> Zusammenführen (vorhandene Daten bleiben, neue Einträge werden ergänzt)</label><br>
+    <label><input type="radio" name="impmode" value="replace"> Ersetzen (alle aktuellen Daten werden überschrieben)</label></p>
+    <input type="file" id="impFile" accept=".json,application/json"></section>
+  <section class="card"><h2>Zurücksetzen</h2><button class="btn ghost-danger" data-act="wipe">Alle Daten in diesem Browser löschen</button></section>`;
+}
+
+/* ---------- Export / Import ---------- */
+function download(name, text, type){
+  const blob = new Blob([text], {type}), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+const csvCell = v => { v = String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; };
+function csvRow(a){ return a.map(csvCell).join(';'); }
+function expJson(){
+  state.lastExport = Date.now(); save();
+  download('zeiterfassung-' + todayStr() + '.json', JSON.stringify(state, null, 1), 'application/json');
+  render(); toast('Sicherung heruntergeladen.');
+}
+function csvEntries(){
+  const now = Date.now();
+  const rows = [['Startdatum','Startzeit','Enddatum','Endzeit','Dauer (Std. dezimal)','Tätigkeit']];
+  [...state.entries].sort((a,b)=>a.s-b.s).forEach(e => { const end = e.e ?? now;
+    rows.push([fmtDate(e.s), fmtTime(e.s), fmtDate(end), fmtTime(end), decCsv(end-e.s), act(e.a).name]); });
+  download('zeiterfassung-eintraege.csv', '﻿' + rows.map(csvRow).join('\r\n'), 'text/csv;charset=utf-8');
+}
+function csvEval(){
+  const g = aggregate(), days = Object.keys(g.days).sort(), cols = orderedActs(new Set(Object.keys(g.tot)));
+  const rows = [['Datum', ...cols.map(a=>a.name), 'Summe (Std. dezimal)']];
+  days.forEach(d => { const tt = Object.values(g.days[d]).reduce((x,y)=>x+y,0);
+    rows.push([fmtDate(parseD(d).getTime()), ...cols.map(a=>g.days[d][a.id] ? decCsv(g.days[d][a.id]) : ''), decCsv(tt)]); });
+  rows.push(['Summe', ...cols.map(a=>decCsv(g.tot[a.id])), decCsv(g.total)]);
+  download('zeiterfassung-auswertung.csv', '﻿' + rows.map(csvRow).join('\r\n'), 'text/csv;charset=utf-8');
+}
+function doImport(obj, mode){
+  if (!obj || !Array.isArray(obj.activities) || !Array.isArray(obj.entries)) throw new Error('Die Datei hat kein gültiges Format.');
+  const acts = obj.activities.filter(a => a && typeof a.id === 'string' && typeof a.name === 'string')
+    .map(a => ({id:a.id, name:a.name, color:/^#[0-9a-f]{6}$/i.test(a.color)?a.color:'#888888', archived:!!a.archived}));
+  const ents = obj.entries.filter(e => e && typeof e.id === 'string' && typeof e.a === 'string' && Number.isFinite(e.s) && (e.e == null || Number.isFinite(e.e)))
+    .map(e => ({id:e.id, a:e.a, s:e.s, e:e.e == null ? null : e.e}));
+  if (mode === 'replace'){
+    state = {version:1, activities:acts, entries:ents, lastExport:state.lastExport}; normalize();
+    return ents.length + ' Einträge übernommen (alte Daten ersetzt).';
+  }
+  const map = {}, now = Date.now();
+  for (const a of acts){
+    const ex = state.activities.find(x => x.id === a.id) || state.activities.find(x => x.name.toLowerCase() === a.name.toLowerCase());
+    if (ex) map[a.id] = ex.id; else { state.activities.push(a); map[a.id] = a.id; }
+  }
+  const ids = new Set(state.entries.map(e => e.id)); let added = 0;
+  for (const e of ents){
+    if (ids.has(e.id)) continue;
+    const ne = {...e, a: map[e.a] ?? e.a};
+    if (ne.e == null && running()) ne.e = now;
+    state.entries.push(ne); added++;
+  }
+  normalize();
+  return added + ' neue Einträge ergänzt, ' + (ents.length-added) + ' bereits vorhanden.';
+}
+
+/* ---------- Dialog ---------- */
+let editId = null, dOrig = null;
+function openEntry(id){
+  editId = id; const dlg = $('#dlg');
+  const e = id ? state.entries.find(x => x.id === id) : null;
+  dOrig = e ? {s:e.s, e:e.e} : null;
+  $('#dTitle').textContent = e ? 'Eintrag bearbeiten' : 'Eintrag nachtragen';
+  $('#dAct').innerHTML = state.activities.map(a => `<option value="${a.id}">${esc(a.name)}${a.archived?' (ausgeblendet)':''}</option>`).join('');
+  let s, en;
+  if (e){ s = e.s; en = e.e; $('#dAct').value = e.a; }
+  else {
+    const d0 = parseD(ui.day).getTime(), d1 = parseD(addDays(ui.day,1)).getTime();
+    const ends = state.entries.filter(x => x.e != null && x.e > d0 && x.e <= d1).map(x => x.e);
+    s = ends.length ? Math.max(...ends) : d0 + 8*3600000; en = s + 1800000;
+  }
+  $('#dStart').value = dtLocal(s); $('#dEnd').value = en == null ? '' : dtLocal(en);
+  $('#dEndHint').textContent = e && e.e == null ? '(leer lassen = läuft weiter)' : '';
+  $('#dDel').style.visibility = e ? 'visible' : 'hidden';
+  dlg.showModal();
+}
+function saveEntry(){
+  const aid = $('#dAct').value, sv = $('#dStart').value, ev = $('#dEnd').value;
+  if (!sv) return toast('Bitte einen Beginn angeben.');
+  const s = (dOrig && sv === dtLocal(dOrig.s)) ? dOrig.s : new Date(sv).getTime();
+  let e;
+  if (!ev){
+    const wasRunning = dOrig && dOrig.e == null;
+    if (!wasRunning) return toast('Bitte ein Ende angeben.');
+    e = null;
+  } else e = (dOrig && dOrig.e != null && ev === dtLocal(dOrig.e)) ? dOrig.e : new Date(ev).getTime();
+  if (e != null && e <= s) return toast('Das Ende muss nach dem Beginn liegen.');
+  if (editId){ const x = state.entries.find(z => z.id === editId); x.a = aid; x.s = s; x.e = e; }
+  else state.entries.push({id:uid(), a:aid, s, e});
+  save(); $('#dlg').close(); render();
+}
+
+/* ---------- Rendering & Events ---------- */
+function render(){
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.id === ui.tab));
+  $('#main').innerHTML = ({erfassen:viewErfassen, auswertung:viewAuswertung, einstellungen:viewSettings, daten:viewDaten})[ui.tab]();
+}
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-act]'); if (!el) return;
+  const id = el.dataset.id;
+  switch (el.dataset.act){
+    case 'tab': ui.tab = id; render(); break;
+    case 'start': startAct(id); break;
+    case 'stop': stopAct(); break;
+    case 'dayprev': ui.day = addDays(ui.day,-1); render(); break;
+    case 'daynext': ui.day = addDays(ui.day,1); render(); break;
+    case 'daytoday': ui.day = todayStr(); render(); break;
+    case 'edit': openEntry(id); break;
+    case 'new': openEntry(null); break;
+    case 'csvEval': csvEval(); break;
+    case 'csvEntries': csvEntries(); break;
+    case 'expJson': expJson(); break;
+    case 'up': case 'down': {
+      const i = state.activities.findIndex(a => a.id === id), j = i + (el.dataset.act === 'up' ? -1 : 1);
+      if (j < 0 || j >= state.activities.length) break;
+      [state.activities[i], state.activities[j]] = [state.activities[j], state.activities[i]]; save(); render(); break; }
+    case 'arch': { const a = act(id); a.archived = !a.archived; save(); render(); break; }
+    case 'delAct':
+      if (state.entries.some(e => e.a === id)) break;
+      if (confirm('Tätigkeit „' + act(id).name + '“ wirklich löschen?')){ state.activities = state.activities.filter(a => a.id !== id); save(); render(); }
+      break;
+    case 'addAct': addAct(); break;
+    case 'wipe':
+      if (confirm('Wirklich ALLE Daten in diesem Browser löschen? Das kann nicht rückgängig gemacht werden.\n\nTipp: vorher eine Sicherung exportieren.')){
+        state = defaultState(); save(); render(); toast('Alle Daten gelöscht.'); }
+      break;
+  }
+});
+function addAct(){
+  const n = $('#newName').value.trim(); if (!n) return toast('Bitte einen Namen eingeben.');
+  if (state.activities.some(a => a.name.toLowerCase() === n.toLowerCase())) return toast('Diese Tätigkeit gibt es schon.');
+  state.activities.push({id:uid(), name:n, color:$('#newColor').value, archived:false}); save(); render();
+}
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'newName') addAct(); });
+document.addEventListener('change', ev => {
+  const el = ev.target, b = el.dataset && el.dataset.bind;
+  if (el.id === 'impFile' && el.files[0]){
+    const mode = (document.querySelector('input[name=impmode]:checked') || {}).value || 'merge';
+    if (mode === 'replace' && !confirm('Alle aktuellen Daten werden durch die Datei ersetzt. Fortfahren?')){ el.value = ''; return; }
+    const fr = new FileReader();
+    fr.onload = () => { try { const msg = doImport(JSON.parse(fr.result), mode); save(); render(); toast(msg); } catch(e){ toast('Import fehlgeschlagen: ' + e.message); } };
+    fr.readAsText(el.files[0]); return;
+  }
+  if (!b) return;
+  if (b === 'aname'){ const v = el.value.trim(); if (v){ act(el.dataset.id).name = v; save(); } render(); return; }
+  if (b === 'acolor'){ act(el.dataset.id).color = el.value; save(); render(); return; }
+  if (b === 'day'){ if (el.value) ui.day = el.value; }
+  else if (b === 'range') ui.range = el.value;
+  else if (b === 'fmt') ui.fmt = el.value;
+  else if (b === 'from') ui.from = el.value;
+  else if (b === 'to') ui.to = el.value;
+  render();
+});
+$('#dSave').onclick = saveEntry;
+$('#dCancel').onclick = () => $('#dlg').close();
+$('#dDel').onclick = () => { if (confirm('Eintrag löschen?')){ state.entries = state.entries.filter(e => e.id !== editId); save(); $('#dlg').close(); render(); } };
+window.addEventListener('storage', e => { if (e.key === KEY){ state = load(); normalize(); render(); } });
+
+/* ---------- Live-Ticker ---------- */
+let lastFull = Date.now();
+function tick(){
+  const r = running(), now = Date.now();
+  if (r){
+    document.title = hms(now - r.s) + ' · ' + act(r.a).name;
+    const lt = $('#liveTime'); if (lt) lt.textContent = hms(now - r.s);
+    const t = todayStr(), tt = dayTotals(t);
+    document.querySelectorAll('[data-today]').forEach(el => el.textContent = fmtD(tt.by[el.dataset.today] || 0));
+    const ld = $('#liveDayTotal'); if (ld && ui.day === t) ld.textContent = fmtD(tt.total);
+  } else document.title = 'Zeiterfassung';
+  if (now - lastFull > 20000){
+    lastFull = now;
+    const ae = document.activeElement;
+    if (!$('#dlg').open && !(ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName))) render();
+  }
+}
+setInterval(tick, 1000);
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+render(); tick();
+</script>
+</body>
+</html>
