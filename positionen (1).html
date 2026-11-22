@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Positionen speichern</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --ink:#1c2530; --muted:#6b7785; --accent:#1769aa; --danger:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:8px 0 16px; }
+  .card { background:var(--card); border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  input[type=text], select { width:100%; padding:12px; font-size:1rem; border:1px solid #cfd6dd; border-radius:10px; margin-bottom:10px; background:#fff; color:var(--ink); }
+  label { display:block; font-size:.85rem; color:var(--muted); margin-bottom:4px; }
+  button { font-size:1rem; padding:12px 16px; border:0; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.big { width:100%; padding:16px; font-size:1.1rem; font-weight:600; }
+  button.sec { background:#e6ebf0; color:var(--ink); }
+  button.del { background:transparent; color:var(--danger); padding:6px 8px; }
+  button:disabled { opacity:.6; }
+  #status { margin-top:10px; font-size:.95rem; color:var(--muted); min-height:1.2em; }
+  #status.err { color:var(--danger); }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .name { font-weight:600; }
+  .meta { color:var(--muted); font-size:.85rem; margin-top:2px; }
+  .fmts { margin-top:8px; }
+  .fmt { display:block; width:100%; text-align:left; background:#f4f6f8; color:var(--ink); border-radius:8px; padding:8px 10px; margin-top:6px; font-size:.95rem; }
+  .fmt small { display:block; color:var(--muted); font-size:.75rem; margin-bottom:2px; }
+  .fmt span { font-family:ui-monospace,Menlo,monospace; word-break:break-word; }
+  .fmt.ok { background:#dff3e3; }
+  a { color:var(--accent); }
+  .tools { display:flex; gap:8px; flex-wrap:wrap; }
+  .empty { color:var(--muted); text-align:center; padding:12px; }
+  progress { width:100%; height:14px; margin:8px 0; }
+  .live { font-family:ui-monospace,Menlo,monospace; font-size:.9rem; margin:6px 0; }
+  .hidden { display:none; }
+  .btnrow { display:flex; gap:8px; margin-top:8px; }
+  .btnrow button { flex:1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>📍 Positionen speichern</h1>
+
+  <div class="card" id="startcard">
+    <input type="text" id="note" placeholder="Notiz (optional), z. B. Parkplatz" autocomplete="off">
+    <label for="count">Anzahl Messungen (alle 5 Sekunden eine)</label>
+    <select id="count">
+      <option value="3">3 Messungen (ca. 10 s)</option>
+      <option value="6" selected>6 Messungen (ca. 25 s)</option>
+      <option value="12">12 Messungen (ca. 55 s)</option>
+      <option value="24">24 Messungen (ca. 2 min)</option>
+    </select>
+    <button class="big" id="save">Position messen &amp; speichern</button>
+  </div>
+
+  <div class="card hidden" id="measurecard">
+    <div id="mtext" style="font-weight:600">Messung läuft …</div>
+    <progress id="prog" value="0" max="1"></progress>
+    <div class="live" id="live"></div>
+    <div class="btnrow">
+      <button id="stopnow">Jetzt speichern</button>
+      <button class="sec" id="cancel">Abbrechen</button>
+    </div>
+    <div class="meta">Tipp: Bildschirm anlassen und möglichst ruhig stehen bleiben.</div>
+  </div>
+
+  <div id="status" role="status" style="margin:0 4px 12px"></div>
+
+  <div class="card tools">
+    <button class="sec" id="copy">CSV kopieren</button>
+    <button class="sec" id="download">CSV herunterladen</button>
+    <button class="sec" id="clear">Alle löschen</button>
+  </div>
+
+  <div id="list"></div>
+</main>
+
+<script>
+/* PURE-START */
+function pad(n, w) { var s = String(n); while (s.length < w) s = '0' + s; return s; }
+
+// Dezimalgrad (Google Maps)
+function fmtDecimal(lat, lon) { return lat.toFixed(6) + ', ' + lon.toFixed(6); }
+
+// Grad Dezimalminuten (Geocaching): N 49° 35.123' E 011° 00.456'
+function fmtDM(v, pos, neg, degWidth) {
+  var hemi = v >= 0 ? pos : neg, a = Math.abs(v);
+  var d = Math.floor(a), m = (a - d) * 60;
+  if (m.toFixed(3) === '60.000') { d += 1; m = 0; }
+  return hemi + ' ' + pad(d, degWidth) + '° ' + pad(m.toFixed(3), 6) + "'";
+}
+function fmtGC(lat, lon) { return fmtDM(lat, 'N', 'S', 2) + ' ' + fmtDM(lon, 'E', 'W', 3); }
+
+// Grad Minuten Sekunden
+function fmtDMSpart(v, pos, neg) {
+  var hemi = v >= 0 ? pos : neg, a = Math.abs(v);
+  var total = Math.round(a * 36000) / 10;           // Sekunden, 0,1 genau
+  var d = Math.floor(total / 3600);
+  var m = Math.floor((total - d * 3600) / 60);
+  var s = total - d * 3600 - m * 60;
+  return d + '° ' + m + "' " + s.toFixed(1) + '" ' + hemi;
+}
+function fmtDMS(lat, lon) { return fmtDMSpart(lat, 'N', 'S') + ' ' + fmtDMSpart(lon, 'E', 'W'); }
+
+// UTM (WGS84 / ETRS89), Ausgabe z. B. "32U 650123 5489456"
+function fmtUTM(lat, lon) {
+  if (lat < -80 || lat > 84) return 'außerhalb des UTM-Bereichs';
+  var bands = 'CDEFGHJKLMNPQRSTUVWX';
+  var band = bands.charAt(Math.min(19, Math.floor((lat + 80) / 8)));
+  var zone = Math.floor((lon + 180) / 6) + 1;
+  if (zone > 60) zone = 60; if (zone < 1) zone = 1;
+  if (band === 'V' && lon >= 3 && lon < 12) zone = 32;
+  if (band === 'X') {
+    if (lon >= 0 && lon < 9) zone = 31; else if (lon >= 9 && lon < 21) zone = 33;
+    else if (lon >= 21 && lon < 33) zone = 35; else if (lon >= 33 && lon < 42) zone = 37;
+  }
+  var a = 6378137, f = 1 / 298.257223563, k0 = 0.9996;
+  var e2 = f * (2 - f), ep2 = e2 / (1 - e2);
+  var rad = Math.PI / 180;
+  var phi = lat * rad, lam = lon * rad, lam0 = ((zone - 1) * 6 - 180 + 3) * rad;
+  var s = Math.sin(phi), c = Math.cos(phi), t = Math.tan(phi);
+  var N = a / Math.sqrt(1 - e2 * s * s), T = t * t, C = ep2 * c * c, A = (lam - lam0) * c;
+  var e4 = e2 * e2, e6 = e4 * e2;
+  var M = a * ((1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * phi
+    - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * phi)
+    + (15 * e4 / 256 + 45 * e6 / 1024) * Math.sin(4 * phi)
+    - (35 * e6 / 3072) * Math.sin(6 * phi));
+  var A2 = A * A, A3 = A2 * A, A4 = A2 * A2, A5 = A4 * A, A6 = A4 * A2;
+  var E = k0 * N * (A + (1 - T + C) * A3 / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * A5 / 120) + 500000;
+  var Nn = k0 * (M + N * t * (A2 / 2 + (5 - T + 9 * C + 4 * C * C) * A4 / 24
+    + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * A6 / 720));
+  if (lat < 0) Nn += 10000000;
+  return pad(zone, 2) + band + ' ' + Math.round(E) + ' ' + Math.round(Nn);
+}
+
+function allFormats(lat, lon) {
+  return { decimal: fmtDecimal(lat, lon), gc: fmtGC(lat, lon), dms: fmtDMS(lat, lon), utm: fmtUTM(lat, lon) };
+}
+
+// Mittelwert + Streuung (RMS-Abstand der Messungen vom Mittelwert in Metern)
+function averageOf(samples) {
+  var n = samples.length, sl = 0, so = 0, i;
+  for (i = 0; i < n; i++) { sl += samples[i].lat; so += samples[i].lon; }
+  var lat = sl / n, lon = so / n, sq = 0, accSum = 0;
+  var kLat = 111320, kLon = 111320 * Math.cos(lat * Math.PI / 180);
+  for (i = 0; i < n; i++) {
+    var dy = (samples[i].lat - lat) * kLat, dx = (samples[i].lon - lon) * kLon;
+    sq += dx * dx + dy * dy; accSum += samples[i].acc;
+  }
+  return { lat: lat, lon: lon, n: n, spread: Math.sqrt(sq / n), acc: accSum / n };
+}
+/* PURE-END */
+
+(function () {
+  var KEY = 'gespeicherte-positionen-v1', PREF = 'positionen-anzahl';
+  var $ = function (id) { return document.getElementById(id); };
+  var items = load();
+  var m = null; // laufende Messung
+
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(items)); }
+    catch (e) { setStatus('Speichern im Browser nicht möglich (privater Modus?).', true); }
+  }
+  function setStatus(t, err) { var s = $('status'); s.textContent = t; s.className = err ? 'err' : ''; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function fmtDate(ts) { return new Date(ts).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'medium' }); }
+
+  try { var pref = localStorage.getItem(PREF); if (pref) $('count').value = pref; } catch (e) {}
+
+  /* ---------- Liste ---------- */
+  var LABELS = [['decimal', 'Google Maps (Dezimalgrad)'], ['gc', 'Geocaching (Grad Dezimalminuten)'],
+                ['dms', 'Grad Minuten Sekunden'], ['utm', 'UTM (WGS84)']];
+
+  function render() {
+    var el = $('list');
+    if (!items.length) { el.innerHTML = '<div class="card empty">Noch keine Positionen gespeichert.</div>'; return; }
+    el.innerHTML = items.map(function (p, i) {
+      var f = allFormats(p.lat, p.lon);
+      var lat = p.lat.toFixed(6), lon = p.lon.toFixed(6);
+      var osm = 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '#map=18/' + lat + '/' + lon;
+      var gm = 'https://www.google.com/maps?q=' + lat + ',' + lon;
+      var n = p.n || 1;
+      var info = n > 1 ? ('Mittel aus ' + n + ' Messungen · Streuung ±' + Math.round(p.spread) + ' m')
+                       : ('Einzelmessung · ±' + Math.round(p.acc) + ' m');
+      var fm = LABELS.map(function (l) {
+        return '<button class="fmt" data-copy="' + esc(f[l[0]]) + '"><small>' + l[1] + ' – antippen zum Kopieren</small><span>' + esc(f[l[0]]) + '</span></button>';
+      }).join('');
+      return '<div class="card"><div class="row"><div>' +
+        '<div class="name">' + esc(p.note || 'Position ' + (items.length - i)) + '</div>' +
+        '<div class="meta">' + fmtDate(p.ts) + '</div>' +
+        '<div class="meta">' + info + '</div></div>' +
+        '<button class="del" data-i="' + i + '" aria-label="Löschen">✕</button></div>' +
+        '<div class="fmts">' + fm + '</div>' +
+        '<div class="meta" style="margin-top:8px"><a href="' + osm + '" target="_blank" rel="noopener">OpenStreetMap</a> · ' +
+        '<a href="' + gm + '" target="_blank" rel="noopener">Google Maps</a></div></div>';
+    }).join('');
+  }
+
+  function copyText(text, done) {
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); ta.remove(); done(ok);
+      } catch (e) { done(false); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    } else fallback();
+  }
+
+  $('list').addEventListener('click', function (e) {
+    var d = e.target.closest('button.del');
+    if (d) { items.splice(+d.dataset.i, 1); persist(); render(); return; }
+    var c = e.target.closest('button.fmt');
+    if (c) copyText(c.dataset.copy, function (ok) {
+      if (ok) { c.classList.add('ok'); setTimeout(function () { c.classList.remove('ok'); }, 800); setStatus('Kopiert: ' + c.dataset.copy); }
+      else setStatus('Kopieren nicht erlaubt.', true);
+    });
+  });
+
+  /* ---------- Messung ---------- */
+  function showMeasure(on) {
+    $('startcard').classList.toggle('hidden', on);
+    $('measurecard').classList.toggle('hidden', !on);
+  }
+
+  function updateLive() {
+    var total = m.total, got = m.samples.length;
+    $('prog').max = total; $('prog').value = m.k;
+    $('mtext').textContent = 'Messung ' + Math.min(m.k, total) + ' von ' + total + ' (gültig: ' + got + ')';
+    if (got) {
+      var avg = averageOf(m.samples);
+      $('live').innerHTML = 'Mittelwert bisher:<br>' + esc(fmtDecimal(avg.lat, avg.lon)) + '<br>' + esc(fmtGC(avg.lat, avg.lon)) +
+        (got > 1 ? '<br>Streuung ±' + Math.round(avg.spread) + ' m' : '');
+    } else $('live').textContent = 'Warte auf GPS-Signal …';
+  }
+
+  function releaseWake() { if (m && m.wake) { try { m.wake.release(); } catch (e) {} } }
+
+  function startMeasure() {
+    if (!('geolocation' in navigator)) { setStatus('Dieser Browser unterstützt keine Standortabfrage.', true); return; }
+    var total = +$('count').value;
+    try { localStorage.setItem(PREF, String(total)); } catch (e) {}
+    m = { total: total, k: 0, samples: [], lastStart: 0, timer: null, note: $('note').value.trim(), wake: null };
+    if (navigator.wakeLock) { navigator.wakeLock.request('screen').then(function (w) { if (m) m.wake = w; else w.release(); }, function () {}); }
+    setStatus('');
+    showMeasure(true); updateLive();
+    step(m);
+  }
+
+  function step(run) {
+    if (m !== run) return;
+    run.k++; run.lastStart = Date.now(); updateLive();
+    navigator.geolocation.getCurrentPosition(function (p) {
+      if (m !== run) return;
+      run.samples.push({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy });
+      after(run);
+    }, function (err) {
+      if (m !== run) return;
+      if (err.code === 1) { abort('Standortzugriff wurde verweigert. Bitte in den Browser-/Handy-Einstellungen erlauben.'); return; }
+      run.lastErr = err; after(run);
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  }
+
+  function after(run) {
+    updateLive();
+    if (run.k >= run.total) { finish(); return; }
+    var wait = Math.max(0, run.lastStart + 5000 - Date.now());
+    run.timer = setTimeout(function () { step(run); }, wait);
+  }
+
+  function endRun() { if (m) { clearTimeout(m.timer); releaseWake(); } m = null; showMeasure(false); }
+
+  function abort(msg) { endRun(); setStatus(msg, true); }
+
+  function finish() {
+    var run = m;
+    if (!run) return;
+    if (!run.samples.length) {
+      endRun();
+      var code = run.lastErr && run.lastErr.code;
+      setStatus(code === 3 ? 'Zeitüberschreitung: kein GPS-Signal. Bitte ins Freie gehen und erneut versuchen.'
+                           : 'Position nicht verfügbar (GPS/Empfang prüfen).', true);
+      return;
+    }
+    var avg = averageOf(run.samples);
+    items.unshift({
+      ts: Date.now(), lat: avg.lat, lon: avg.lon, n: avg.n,
+      spread: avg.spread, acc: avg.acc, note: run.note, f: allFormats(avg.lat, avg.lon)
+    });
+    persist(); render();
+    $('note').value = '';
+    endRun();
+    setStatus('Gespeichert: Mittel aus ' + avg.n + ' Messung' + (avg.n > 1 ? 'en' : '') +
+      (avg.n > 1 ? ', Streuung ±' + Math.round(avg.spread) + ' m.' : '.'));
+  }
+
+  $('save').addEventListener('click', startMeasure);
+  $('stopnow').addEventListener('click', function () { if (m) finish(); });
+  $('cancel').addEventListener('click', function () { endRun(); setStatus('Messung abgebrochen.'); });
+
+  /* ---------- Export ---------- */
+  function csv() {
+    var rows = ['Zeitpunkt;Messungen;Streuung_m;Breite;Laenge;Google_Maps;Geocaching;GMS;UTM;Notiz'];
+    items.slice().reverse().forEach(function (p) {
+      var f = allFormats(p.lat, p.lon);
+      rows.push([new Date(p.ts).toISOString(), p.n || 1, Math.round(p.spread || 0), p.lat.toFixed(7), p.lon.toFixed(7),
+        '"' + f.decimal + '"', '"' + f.gc + '"', '"' + f.dms + '"', '"' + f.utm + '"',
+        '"' + (p.note || '').replace(/"/g, '""') + '"'].join(';'));
+    });
+    return rows.join('\n');
+  }
+
+  $('copy').addEventListener('click', function () {
+    if (!items.length) { setStatus('Nichts zu kopieren.', true); return; }
+    copyText(csv(), function (ok) { setStatus(ok ? 'CSV in die Zwischenablage kopiert.' : 'Kopieren nicht erlaubt.', !ok); });
+  });
+
+  $('download').addEventListener('click', function () {
+    if (!items.length) { setStatus('Nichts zum Herunterladen.', true); return; }
+    var blob = new Blob(['﻿' + csv()], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'positionen.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  $('clear').addEventListener('click', function () {
+    if (items.length && confirm('Wirklich alle ' + items.length + ' Positionen löschen?')) {
+      items = []; persist(); render();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
